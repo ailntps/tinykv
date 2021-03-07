@@ -26,6 +26,7 @@ const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 type StoreState int32
 
+//end to end map
 const (
 	StoreState_Up        StoreState = 0
 	StoreState_Offline   StoreState = 1

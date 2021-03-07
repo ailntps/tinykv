@@ -41,6 +41,7 @@ func PutCF(engine *badger.DB, cf string, key []byte, val []byte) error {
 	})
 }
 
+//GetMeta proto.Message is  a interface,read messaage from msg.bu why val don't store
 func GetMeta(engine *badger.DB, key []byte, msg proto.Message) error {
 	var val []byte
 	err := engine.View(func(txn *badger.Txn) error {
@@ -57,6 +58,7 @@ func GetMeta(engine *badger.DB, key []byte, msg proto.Message) error {
 	return proto.Unmarshal(val, msg)
 }
 
+//GetMetaFromTxn get from transaction
 func GetMetaFromTxn(txn *badger.Txn, key []byte, msg proto.Message) error {
 	item, err := txn.Get(key)
 	if err != nil {
@@ -66,10 +68,13 @@ func GetMetaFromTxn(txn *badger.Txn, key []byte, msg proto.Message) error {
 	if err != nil {
 		return err
 	}
+	//msg decode
 	return proto.Unmarshal(val, msg)
 }
 
+//PutMeta encode msg and store in db.
 func PutMeta(engine *badger.DB, key []byte, msg proto.Message) error {
+	//msg encode
 	val, err := proto.Marshal(msg)
 	if err != nil {
 		return err
