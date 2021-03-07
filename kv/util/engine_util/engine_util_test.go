@@ -10,10 +10,13 @@ import (
 )
 
 func TestEngineUtil(t *testing.T) {
+	//create a temp directory
 	dir, err := ioutil.TempDir("", "engine_util")
 	opts := badger.DefaultOptions
+	//set the parameter of badger
 	opts.Dir = dir
 	opts.ValueDir = dir
+	//open badger db
 	db, err := badger.Open(opts)
 	require.Nil(t, err)
 

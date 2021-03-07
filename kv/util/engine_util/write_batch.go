@@ -22,15 +22,18 @@ const (
 
 var CFs [3]string = [3]string{CfDefault, CfWrite, CfLock}
 
+//Len the length of Entry
 func (wb *WriteBatch) Len() int {
 	return len(wb.entries)
 }
 
+//SetCF Add entry to writeBatch
 func (wb *WriteBatch) SetCF(cf string, key, val []byte) {
 	wb.entries = append(wb.entries, &badger.Entry{
 		Key:   KeyWithCF(cf, key),
 		Value: val,
 	})
+	//why don't have cd length
 	wb.size += len(key) + len(val)
 }
 

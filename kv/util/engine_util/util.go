@@ -7,11 +7,14 @@ import (
 	"github.com/golang/protobuf/proto"
 )
 
+//KeyWithCF :cf_key to ensure column family
 func KeyWithCF(cf string, key []byte) []byte {
 	return append([]byte(cf+"_"), key...)
 }
 
+//GetCF return CF value
 func GetCF(db *badger.DB, cf string, key []byte) (val []byte, err error) {
+	//*DB.View execute a read-only transaction
 	err = db.View(func(txn *badger.Txn) error {
 		val, err = GetCFFromTxn(txn, cf, key)
 		return err
@@ -19,15 +22,19 @@ func GetCF(db *badger.DB, cf string, key []byte) (val []byte, err error) {
 	return
 }
 
+//GetCFFromTxn return the item of column family key "cf_key"
 func GetCFFromTxn(txn *badger.Txn, cf string, key []byte) (val []byte, err error) {
+	//Get looks for key and returns corresponding Item. If key is not found, ErrKeyNotFound is returned.
 	item, err := txn.Get(KeyWithCF(cf, key))
 	if err != nil {
 		return nil, err
 	}
+	//ValueCopy returns a copy of the value of the item from the value log, writing it to dst slice
 	val, err = item.ValueCopy(val)
 	return
 }
 
+//PutCF put <cf,key>->value pair
 func PutCF(engine *badger.DB, cf string, key []byte, val []byte) error {
 	return engine.Update(func(txn *badger.Txn) error {
 		return txn.Set(KeyWithCF(cf, key), val)
@@ -72,6 +79,7 @@ func PutMeta(engine *badger.DB, key []byte, msg proto.Message) error {
 	})
 }
 
+//DeleteCF delete <cf,key>->value pair
 func DeleteCF(engine *badger.DB, cf string, key []byte) error {
 	return engine.Update(func(txn *badger.Txn) error {
 		return txn.Delete(KeyWithCF(cf, key))
