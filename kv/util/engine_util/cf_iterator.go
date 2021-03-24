@@ -106,7 +106,6 @@ type DBIterator interface {
 	// Seek would seek to the provided key if present. If absent, it would seek to the next smallest key
 	// greater than provided.
 	Seek([]byte)
-
 	// Close the iterator
 	Close()
 }

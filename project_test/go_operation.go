@@ -6,7 +6,6 @@ import (
 	"log"
 
 	"github.com/Connor1996/badger"
-	"github.com/pingcap-incubator/tinykv/kv/util/engine_util"
 )
 
 func main() {
@@ -25,37 +24,45 @@ func main() {
 	}
 
 	defer db.Close()
+	bkey := func(i int) []byte {
+		return []byte(fmt.Sprintf("%09d", i))
+	}
+	bval := func(i int) []byte {
+		return []byte(fmt.Sprintf("%025d", i))
+	}
 
-	// err = db.Update(func(txn *badger.Txn) error {
-	// 	err := txn.Set([]byte("key1"), []byte("value1"))
-	// 	err = txn.Set([]byte("key2"), []byte("value2"))
-	// 	err = txn.Set([]byte("cf1_key1"), []byte("key1"))
-	// 	err = txn.Set([]byte("cf1_key2"), []byte("key2"))
-	// 	return err
-	// })
+	txn := db.NewTransaction(true)
 
-	err = engine_util.PutCF(db, "cf1", []byte("key1"), []byte("value1"))
-	err = engine_util.PutCF(db, "cf1", []byte("key2"), []byte("value2"))
-	err = engine_util.PutCF(db, "cf1", []byte("key3"), []byte("value3"))
+	// Fill in 1000 items
+	n := 1000
+	for i := 0; i < n; i++ {
+		err := txn.SetEntry(&badger.Entry{
+			Key:   bkey(i),
+			Value: bval(i)})
+		if err != nil {
+			panic(err)
+		}
+	}
 
-	str, _ := engine_util.GetCF(db, "cf1", []byte("key2"))
-	fmt.Printf(string(str) + "\n")
+	err = txn.Commit()
+	if err != nil {
+		panic(err)
+	}
+	opt := badger.DefaultIteratorOptions
 
-	//read
-	// err = db.View(func(txn *badger.Txn) error {
-	// 	opts := badger.DefaultIteratorOptions
-	// 	it := txn.NewIterator(opts)
-	// 	defer it.Close()
+	// Iterate over 1000 items
+	var count int
+	err = db.View(func(txn *badger.Txn) error {
+		it := txn.NewIterator(opt)
+		defer it.Close()
+		for it.Rewind(); it.Valid(); it.Next() {
+			count++
+		}
+		return nil
+	})
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Counted %d elements", count)
 
-	// 	for it.Rewind(); it.Valid(); it.Next() {
-	// 		item := it.Item()
-	// 		k := item.Key()
-	// 		v, err := item.Value()
-	// 		fmt.Printf("key =%s, value=%s\n", k, v)
-	// 		if err != nil {
-	// 			return err
-	// 		}
-	// 	}
-	// 	return nil
-	// })
 }

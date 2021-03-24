@@ -38,12 +38,14 @@ func NewServer(storage storage.Storage) *Server {
 // Raw API.
 func (server *Server) RawGet(_ context.Context, req *kvrpcpb.RawGetRequest) (*kvrpcpb.RawGetResponse, error) {
 	reader, err := server.storage.Reader(req.Context)
+	defer reader.Close()
 	if err != nil {
-		return &kvrpcpb.RawGetResponse{}, nil
+		return &kvrpcpb.RawGetResponse{}, err
 	}
+
 	value, err := reader.GetCF(req.Cf, req.Key)
 	if err != nil {
-		return &kvrpcpb.RawGetResponse{}, nil
+		return &kvrpcpb.RawGetResponse{}, err
 	}
 	resp := &kvrpcpb.RawGetResponse{
 		Value:    value,
@@ -53,7 +55,7 @@ func (server *Server) RawGet(_ context.Context, req *kvrpcpb.RawGetRequest) (*kv
 		resp.NotFound = true
 	}
 	// Your Code Here (1).
-	return resp, nil
+	return resp, err
 }
 
 func (server *Server) RawPut(_ context.Context, req *kvrpcpb.RawPutRequest) (*kvrpcpb.RawPutResponse, error) {
@@ -70,7 +72,7 @@ func (server *Server) RawPut(_ context.Context, req *kvrpcpb.RawPutRequest) (*kv
 	if err != nil {
 		return &kvrpcpb.RawPutResponse{}, err
 	}
-	return &kvrpcpb.RawPutResponse{}, nil
+	return &kvrpcpb.RawPutResponse{}, err
 }
 
 func (server *Server) RawDelete(_ context.Context, req *kvrpcpb.RawDeleteRequest) (*kvrpcpb.RawDeleteResponse, error) {
@@ -86,16 +88,19 @@ func (server *Server) RawDelete(_ context.Context, req *kvrpcpb.RawDeleteRequest
 	if err != nil {
 		return &kvrpcpb.RawDeleteResponse{}, err
 	}
-	return &kvrpcpb.RawDeleteResponse{}, nil
+	return &kvrpcpb.RawDeleteResponse{}, err
 }
 
 func (server *Server) RawScan(_ context.Context, req *kvrpcpb.RawScanRequest) (*kvrpcpb.RawScanResponse, error) {
 	// Your Code Here (1).
 	reader, err := server.storage.Reader(req.Context)
+	defer reader.Close()
 	if err != nil {
 		return &kvrpcpb.RawScanResponse{}, err
 	}
 	iter := reader.IterCF(req.Cf)
+	defer iter.Close()
+
 	iter.Seek(req.StartKey)
 	var pairs []*kvrpcpb.KvPair
 	limit := req.Limit
@@ -113,10 +118,11 @@ func (server *Server) RawScan(_ context.Context, req *kvrpcpb.RawScanRequest) (*
 		}
 
 	}
+	//should close iterator
 	resp := &kvrpcpb.RawScanResponse{
 		Kvs: pairs,
 	}
-	return resp, nil
+	return resp, err
 }
 
 // Raft commands (tinykv <-> tinykv)

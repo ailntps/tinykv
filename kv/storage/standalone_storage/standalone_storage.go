@@ -1,6 +1,7 @@
 package standalone_storage
 
 import (
+	"errors"
 	"path"
 
 	"github.com/Connor1996/badger"
@@ -20,23 +21,27 @@ type StandAloneStorage struct {
 
 func NewStandAloneStorage(conf *config.Config) *StandAloneStorage {
 	// Your Code Here (1).
-	dbPath := conf.DBPath
-	//path.join() return different path as different os
+	return &StandAloneStorage{
+		engine: &engine_util.Engines{},
+		config: conf,
+	}
+}
+
+func (s *StandAloneStorage) Start() error {
+	// Your Code Here (1).
+	dbPath := s.config.DBPath
 	kvPath := path.Join(dbPath, "kv")
 	raftPath := path.Join(dbPath, "raft")
 
 	kvEngine := engine_util.CreateDB(kvPath, false)
 	raftEngine := engine_util.CreateDB(raftPath, true)
 
-	return &StandAloneStorage{
-		config: conf,
-		engine: engine_util.NewEngines(kvEngine, raftEngine, kvPath, raftPath),
-	}
-}
+	s.engine = engine_util.NewEngines(kvEngine, raftEngine, kvPath, raftPath)
 
-func (s *StandAloneStorage) Start() error {
-	// Your Code Here (1).
-	return nil
+	if s.engine != nil {
+		return nil
+	}
+	return errors.New("failed to start engine!! ")
 }
 
 func (s *StandAloneStorage) Stop() error {

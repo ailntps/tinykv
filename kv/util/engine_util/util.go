@@ -1,5 +1,7 @@
 package engine_util
 
+// CF:the value of same key is not different in different CF
+// it can be thought as a mini database,used to suport tranaction
 import (
 	"bytes"
 
@@ -68,7 +70,7 @@ func GetMetaFromTxn(txn *badger.Txn, key []byte, msg proto.Message) error {
 	if err != nil {
 		return err
 	}
-	//msg decode
+	//msg decode,put metadata in msg
 	return proto.Unmarshal(val, msg)
 }
 

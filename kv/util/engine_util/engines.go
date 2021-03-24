@@ -20,6 +20,7 @@ type Engines struct {
 	RaftPath string
 }
 
+//NewEngines get a pointer of Engines.
 func NewEngines(kvEngine, raftEngine *badger.DB, kvPath, raftPath string) *Engines {
 	return &Engines{
 		Kv:       kvEngine,
