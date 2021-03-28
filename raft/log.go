@@ -14,9 +14,11 @@
 
 package raft
 
-import pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
+import (
+	pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
+)
 
-// RaftLog manage the log entries, its struct look like:
+// RaftLog manage 回退the log entries, its struct look like:
 //
 //  snapshot/first.....applied....committed....stabled.....last
 //  --------|------------------------------------------------|
@@ -50,15 +52,25 @@ type RaftLog struct {
 	pendingSnapshot *pb.Snapshot
 
 	// Your Data Here (2A).
+	firstIndex uint64
 }
 
 // newLog returns log using the given storage. It recovers the log
 // to the state that it just commits and applies the latest snapshot.
 func newLog(storage Storage) *RaftLog {
 	// Your Code Here (2A).
+	fi, _ := storage.FirstIndex()
+	li, _ := storage.LastIndex()
+	ent, err := storage.Entries(fi, li+1)
+	if err != nil {
+		panic(err)
+	}
 	return &RaftLog{
-		storage: storage,
-		entries: make([]pb.Entry, 0),
+		storage:    storage,
+		entries:    ent,
+		stabled:    li,
+		firstIndex: fi,
+		applied:    fi - 1,
 	}
 }
 
@@ -72,22 +84,30 @@ func (l *RaftLog) maybeCompact() {
 // unstableEntries return all the unstable entries
 func (l *RaftLog) unstableEntries() []pb.Entry {
 	// Your Code Here (2A).
+	if len(l.entries) > 0 {
+		return l.entries[l.stabled-l.firstIndex+1:]
+	}
 	return nil
 }
 
 // nextEnts returns all the committed but not applied entries
 func (l *RaftLog) nextEnts() (ents []pb.Entry) {
-
+	if len(l.entries) > 0 {
+		return l.entries[l.applied+1-l.firstIndex : l.committed+1-l.firstIndex]
+	}
 	// Your Code Here (2A).
-	v, _ := l.storage.Entries(l.applied, l.committed)
-	return v
+	return nil
 }
 
 // LastIndex return the last index of the log entries
 func (l *RaftLog) LastIndex() uint64 {
 	// Your Code Here (2A).
-	li, _ := l.storage.LastIndex()
-	return li
+	n := uint64(len(l.entries))
+	if n > 0 {
+		li := l.entries[n-1].Index
+		return li
+	}
+	return None
 }
 
 // LastTerm return term of log entry in lastindex
@@ -99,6 +119,9 @@ func (l *RaftLog) LastTerm() uint64 {
 // Term return the term of the entry in the given index
 func (l *RaftLog) Term(i uint64) (uint64, error) {
 	// Your Code Here (2A).
-
-	return l.storage.Term(i)
+	if (len(l.entries) > 0) && i >= l.firstIndex && i <= l.LastIndex() {
+		return l.entries[i-l.firstIndex].Term, nil
+	}
+	term, err := l.storage.Term(i)
+	return term, err
 }

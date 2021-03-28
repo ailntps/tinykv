@@ -465,6 +465,7 @@ func TestLeaderAcknowledgeCommit2AB(t *testing.T) {
 
 		for _, m := range r.readMessages() {
 			if tt.acceptors[m.To] {
+
 				r.Step(acceptAndReply(m))
 			}
 		}
@@ -578,7 +579,7 @@ func TestFollowerCheckMessageType_MsgAppend2AB(t *testing.T) {
 		// match with committed entries
 		{0, 0, false},
 		{ents[0].Term, ents[0].Index, false},
-		// match with uncommitted entries
+		// match with uncommitted entriesF
 		{ents[1].Term, ents[1].Index, false},
 
 		// unmatch with existing entry
