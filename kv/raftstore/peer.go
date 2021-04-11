@@ -19,17 +19,19 @@ import (
 	"github.com/pingcap/errors"
 )
 
+//NotifyStaleReq set a ErrstableCommand in callback as respone
 func NotifyStaleReq(term uint64, cb *message.Callback) {
 	cb.Done(ErrRespStaleCommand(term))
 }
 
+//NotifyReqRegionRemoved set a ErrRegionNotFound in callback as respone
 func NotifyReqRegionRemoved(regionId uint64, cb *message.Callback) {
 	regionNotFound := &util.ErrRegionNotFound{RegionId: regionId}
 	resp := ErrResp(regionNotFound)
 	cb.Done(resp)
 }
 
-// If we create the peer actively, like bootstrap/split/merge region, we should
+// If we create the peer actively, like bootstrap(create by itself)/split/merge region, we should
 // use this function to create the peer. The region must contain the peer info
 // for this store.
 func createPeer(storeID uint64, cfg *config.Config, sched chan<- worker.Task,
@@ -111,13 +113,14 @@ type peer struct {
 	ApproximateSize *uint64
 }
 
+//NewPeer create a peer
 func NewPeer(storeId uint64, cfg *config.Config, engines *engine_util.Engines, region *metapb.Region, regionSched chan<- worker.Task,
 	meta *metapb.Peer) (*peer, error) {
 	if meta.GetId() == util.InvalidID {
 		return nil, fmt.Errorf("invalid peer id")
 	}
 	tag := fmt.Sprintf("[region %v] %v", region.GetId(), meta.GetId())
-
+	//raftLocaState and RaftApplyState initial from engines Raft and kv
 	ps, err := NewPeerStorage(engines, region, regionSched, tag)
 	if err != nil {
 		return nil, err
@@ -199,6 +202,7 @@ func (p *peer) MaybeDestroy() bool {
 /// 3. Notify all pending requests.
 func (p *peer) Destroy(engine *engine_util.Engines, keepData bool) error {
 	start := time.Now()
+	//id start/end key ,regionepoch ,peers
 	region := p.Region()
 	log.Infof("%v begin to destroy", p.Tag)
 
@@ -208,6 +212,7 @@ func (p *peer) Destroy(engine *engine_util.Engines, keepData bool) error {
 	if err := p.peerStorage.clearMeta(kvWB, raftWB); err != nil {
 		return err
 	}
+	//set a regionLocalstae(four state) in kvWB
 	meta.WriteRegionState(kvWB, region, rspb.PeerState_Tombstone)
 	// write kv rocksdb first in case of restart happen between two write
 	if err := kvWB.WriteToDB(engine.Kv); err != nil {
@@ -216,7 +221,7 @@ func (p *peer) Destroy(engine *engine_util.Engines, keepData bool) error {
 	if err := raftWB.WriteToDB(engine.Raft); err != nil {
 		return err
 	}
-
+	//length of ps.region.peers >0?
 	if p.peerStorage.isInitialized() && !keepData {
 		// If we meet panic when deleting data and raft log, the dirty data
 		// will be cleared by a newer snapshot applying or restart.
@@ -264,6 +269,7 @@ func (p *peer) IsLeader() bool {
 	return p.RaftGroup.Raft.State == raft.StateLeader
 }
 
+//Send a raftMessage to msgs.To's peer.use Transport interface
 func (p *peer) Send(trans Transport, msgs []eraftpb.Message) {
 	for _, msg := range msgs {
 		err := p.sendRaftMessage(msg, trans)
@@ -342,6 +348,7 @@ func (p *peer) Term() uint64 {
 	return p.RaftGroup.Raft.Term
 }
 
+//HearbeatScheduler write a SchedulerRegionHearbeatTask in ch
 func (p *peer) HeartbeatScheduler(ch chan<- worker.Task) {
 	clonedRegion := new(metapb.Region)
 	err := util.CloneMsg(p.Region(), clonedRegion)

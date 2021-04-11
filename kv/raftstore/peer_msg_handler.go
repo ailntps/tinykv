@@ -43,6 +43,11 @@ func (d *peerMsgHandler) HandleRaftReady() {
 		return
 	}
 	// Your Code Here (2B).
+	// processes all the messages received from raftCh,
+	//including MsgTypeTick which calls RawNode.Tick() to drive the Raft,
+	// MsgTypeRaftCmd which wraps the request from clients and MsgTypeRaftMessage which
+	//is the message transported between Raft peers.
+
 }
 
 func (d *peerMsgHandler) HandleMsg(msg message.Msg) {
@@ -106,14 +111,52 @@ func (d *peerMsgHandler) preProposeRaftCommand(req *raft_cmdpb.RaftCmdRequest) e
 	}
 	return err
 }
+func (d *peerMsgHandler) proposeAdminRequest(msg *raft_cmdpb.RaftCmdRequest, cb *message.Callback) {
 
+}
+func getRequestKey(re *raft_cmdpb.Request) []byte {
+	var key []byte
+	switch re.CmdType {
+	case raft_cmdpb.CmdType_Get:
+		key = re.Get.Key
+	case raft_cmdpb.CmdType_Put:
+		key = re.Put.Key
+	case raft_cmdpb.CmdType_Delete:
+		key = re.Delete.Key
+	}
+	return key
+}
+func (d *peerMsgHandler) proposeRequest(msg *raft_cmdpb.RaftCmdRequest, cb *message.Callback) {
+
+	key := getRequestKey(msg.Requests[0])
+	if key != nil {
+		err := util.CheckKeyInRegion(key, d.Region())
+		if err != nil {
+			cb.Done(ErrResp(err))
+			return
+		}
+	}
+	data, err := msg.Marshal()
+	if err != nil {
+		panic(err)
+	}
+	p := &proposal{index: d.nextProposalIndex(), term: d.Term(), cb: cb}
+	d.proposals = append(d.proposals, p)
+	d.RaftGroup.Propose(data)
+}
 func (d *peerMsgHandler) proposeRaftCommand(msg *raft_cmdpb.RaftCmdRequest, cb *message.Callback) {
 	err := d.preProposeRaftCommand(msg)
 	if err != nil {
 		cb.Done(ErrResp(err))
 		return
 	}
+	if msg.AdminRequest != nil {
+		d.proposeAdminRequest(msg, cb)
+	} else {
+		d.proposeRequest(msg, cb)
+	}
 	// Your Code Here (2B).
+
 }
 
 func (d *peerMsgHandler) onTick() {

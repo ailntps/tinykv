@@ -8,6 +8,7 @@ import (
 	rspb "github.com/pingcap-incubator/tinykv/proto/pkg/raft_serverpb"
 )
 
+//GetRegionLocalState use key get Value from database
 func GetRegionLocalState(db *badger.DB, regionId uint64) (*rspb.RegionLocalState, error) {
 	regionLocalState := new(rspb.RegionLocalState)
 	if err := engine_util.GetMeta(db, RegionStateKey(regionId), regionLocalState); err != nil {
@@ -16,6 +17,7 @@ func GetRegionLocalState(db *badger.DB, regionId uint64) (*rspb.RegionLocalState
 	return regionLocalState, nil
 }
 
+//GetRaftLocalState use key get Value from database
 func GetRaftLocalState(db *badger.DB, regionId uint64) (*rspb.RaftLocalState, error) {
 	raftLocalState := new(rspb.RaftLocalState)
 	if err := engine_util.GetMeta(db, RaftStateKey(regionId), raftLocalState); err != nil {
@@ -24,6 +26,7 @@ func GetRaftLocalState(db *badger.DB, regionId uint64) (*rspb.RaftLocalState, er
 	return raftLocalState, nil
 }
 
+//GetApplyState use key get Value from database
 func GetApplyState(db *badger.DB, regionId uint64) (*rspb.RaftApplyState, error) {
 	applyState := new(rspb.RaftApplyState)
 	if err := engine_util.GetMeta(db, ApplyStateKey(regionId), applyState); err != nil {
@@ -32,6 +35,7 @@ func GetApplyState(db *badger.DB, regionId uint64) (*rspb.RaftApplyState, error)
 	return applyState, nil
 }
 
+// GetRaftEntry use key get Value from database
 func GetRaftEntry(db *badger.DB, regionId, idx uint64) (*eraftpb.Entry, error) {
 	entry := new(eraftpb.Entry)
 	if err := engine_util.GetMeta(db, RaftLogKey(regionId, idx), entry); err != nil {
@@ -47,9 +51,11 @@ const (
 	RaftInitLogIndex = 5
 )
 
+// InitRaftLocalState is active create,lastIndex and lastTerm is 5
 func InitRaftLocalState(raftEngine *badger.DB, region *metapb.Region) (*rspb.RaftLocalState, error) {
 	raftState, err := GetRaftLocalState(raftEngine, region.Id)
 	if err != nil && err != badger.ErrKeyNotFound {
+		//don't find value,return nil and err
 		return nil, err
 	}
 	if err == badger.ErrKeyNotFound {
@@ -57,6 +63,7 @@ func InitRaftLocalState(raftEngine *badger.DB, region *metapb.Region) (*rspb.Raf
 		raftState.HardState = new(eraftpb.HardState)
 		if len(region.Peers) > 0 {
 			// new split region
+			//init 5,5 and store in raft db
 			raftState.LastIndex = RaftInitLogIndex
 			raftState.LastTerm = RaftInitLogTerm
 			raftState.HardState.Term = RaftInitLogTerm
@@ -70,6 +77,7 @@ func InitRaftLocalState(raftEngine *badger.DB, region *metapb.Region) (*rspb.Raf
 	return raftState, nil
 }
 
+//InitApplyState also create
 func InitApplyState(kvEngine *badger.DB, region *metapb.Region) (*rspb.RaftApplyState, error) {
 	applyState, err := GetApplyState(kvEngine, region.Id)
 	if err != nil && err != badger.ErrKeyNotFound {

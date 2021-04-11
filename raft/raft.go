@@ -197,6 +197,10 @@ func newRaft(c *Config) *Raft {
 		}
 	}
 	r.Term, r.Vote, r.RaftLog.committed = hardSt.GetTerm(), hardSt.GetVote(), hardSt.GetCommit()
+
+	if c.Applied > 0 {
+		r.RaftLog.applied = c.Applied
+	}
 	return r
 }
 
@@ -235,7 +239,8 @@ func (r *Raft) sendHeartbeat(to uint64) {
 		To:      to,
 		From:    r.id,
 		Term:    r.Term,
-		Commit:  r.RaftLog.committed,
+		// follower's log entry may short than leader's commitIndex
+		Commit: min(r.RaftLog.committed, r.Prs[to].Match),
 	}
 	r.msgs = append(r.msgs, m)
 	// Your Code Here (2A).
@@ -480,9 +485,9 @@ func (r *Raft) handAppendEntriesRespone(m pb.Message) {
 		}
 		r.sendAppend(m.From)
 	} else {
-		r.Prs[m.From].Next = m.Index + 1
-		r.Prs[m.From].Match = m.Index
 
+		r.Prs[m.From].Match = m.Index
+		r.Prs[m.From].Next = r.Prs[m.From].Match + 1
 		preCommit := r.RaftLog.committed
 
 		for i := r.RaftLog.committed + 1; i < r.RaftLog.LastIndex()+1; i++ {
@@ -640,11 +645,10 @@ func (r *Raft) handleHeartbeat(m pb.Message) {
 	r.becomeFollower(m.Term, m.From)
 	r.resetTime()
 	reject := false
-
 	if m.Term > r.Term {
 		reject = true
 	}
-
+	r.RaftLog.committed = m.Commit
 	//r.Term>m.Term
 	msg := pb.Message{
 		MsgType: pb.MessageType_MsgHeartbeatResponse,
@@ -655,6 +659,20 @@ func (r *Raft) handleHeartbeat(m pb.Message) {
 		Index:   r.RaftLog.LastIndex(),
 	}
 	r.msgs = append(r.msgs, msg)
+}
+func (r *Raft) softState() *SoftState {
+	return &SoftState{
+		Lead:      r.Lead,
+		RaftState: r.State,
+	}
+}
+func (r *Raft) hardState() pb.HardState {
+	return pb.HardState{
+		Term:   r.Term,
+		Vote:   r.Vote,
+		Commit: r.RaftLog.committed,
+	}
+
 }
 
 // handleSnapshot handle Snapshot RPC request

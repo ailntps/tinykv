@@ -21,7 +21,7 @@ type peerState struct {
 type router struct {
 	peers       sync.Map // regionID -> peerState
 	peerSender  chan message.Msg
-	storeSender chan<- message.Msg
+	storeSender chan<- message.Msg //chan<- is write in channel,<-chan is reading from channel
 }
 
 func newRouter(storeSender chan<- message.Msg) *router {
@@ -56,7 +56,6 @@ func (pr *router) close(regionID uint64) {
 		pr.peers.Delete(regionID)
 	}
 }
-
 func (pr *router) send(regionID uint64, msg message.Msg) error {
 	msg.RegionID = regionID
 	p := pr.get(regionID)
@@ -94,6 +93,7 @@ func (r *RaftstoreRouter) SendRaftMessage(msg *raft_serverpb.RaftMessage) error 
 
 }
 
+//SendRaftCommand send msg to peersender
 func (r *RaftstoreRouter) SendRaftCommand(req *raft_cmdpb.RaftCmdRequest, cb *message.Callback) error {
 	cmd := &message.MsgRaftCmd{
 		Request:  req,

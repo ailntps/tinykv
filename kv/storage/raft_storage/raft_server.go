@@ -38,6 +38,7 @@ type RaftStorage struct {
 	wg sync.WaitGroup
 }
 
+//RegionError include two error,notLeader an stablelog at 2B
 type RegionError struct {
 	RequestErr *errorpb.Error
 }
@@ -60,10 +61,12 @@ func (rs *RaftStorage) checkResponse(resp *raft_cmdpb.RaftCmdResponse, reqCount 
 // NewRaftStorage creates a new storage engine backed by a raftstore.
 func NewRaftStorage(conf *config.Config) *RaftStorage {
 	dbPath := conf.DBPath
+
 	kvPath := filepath.Join(dbPath, "kv")
 	raftPath := filepath.Join(dbPath, "raft")
 	snapPath := filepath.Join(dbPath, "snap")
-
+	//MkdirAll create muti directory,MKdir create simple directory why use Mkdir create
+	//snap Path??
 	os.MkdirAll(kvPath, os.ModePerm)
 	os.MkdirAll(raftPath, os.ModePerm)
 	os.Mkdir(snapPath, os.ModePerm)
@@ -75,6 +78,7 @@ func NewRaftStorage(conf *config.Config) *RaftStorage {
 	return &RaftStorage{engines: engines, config: conf}
 }
 
+//Write do Put and delete request
 func (rs *RaftStorage) Write(ctx *kvrpcpb.Context, batch []storage.Modify) error {
 	var reqs []*raft_cmdpb.Request
 	for _, m := range batch {
@@ -109,14 +113,17 @@ func (rs *RaftStorage) Write(ctx *kvrpcpb.Context, batch []storage.Modify) error
 		Header:   header,
 		Requests: reqs,
 	}
+	//cb is callback
 	cb := message.NewCallback()
+	//
 	if err := rs.raftRouter.SendRaftCommand(request, cb); err != nil {
 		return err
 	}
-
+	//check Respon & reuqest
 	return rs.checkResponse(cb.WaitResp(), len(reqs))
 }
 
+//Reader return a Reader
 func (rs *RaftStorage) Reader(ctx *kvrpcpb.Context) (storage.StorageReader, error) {
 	header := &raft_cmdpb.RaftRequestHeader{
 		RegionId:    ctx.RegionId,
@@ -127,7 +134,7 @@ func (rs *RaftStorage) Reader(ctx *kvrpcpb.Context) (storage.StorageReader, erro
 	request := &raft_cmdpb.RaftCmdRequest{
 		Header: header,
 		Requests: []*raft_cmdpb.Request{{
-			CmdType: raft_cmdpb.CmdType_Snap,
+			CmdType: raft_cmdpb.CmdType_Snap, // why is snap
 			Snap:    &raft_cmdpb.SnapRequest{},
 		}},
 	}
