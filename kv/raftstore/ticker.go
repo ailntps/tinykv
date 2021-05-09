@@ -14,7 +14,8 @@ type ticker struct {
 }
 
 type tickSchedule struct {
-	runAt    int64
+	runAt int64
+	//length of time marked off by two instants
 	interval int64
 }
 

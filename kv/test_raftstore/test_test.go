@@ -219,14 +219,14 @@ func GenericTest(t *testing.T, part string, nclients int, unreliable bool, crash
 				if (rand.Int() % 1000) < 500 {
 					key := strconv.Itoa(cli) + " " + fmt.Sprintf("%08d", j)
 					value := "x " + strconv.Itoa(cli) + " " + strconv.Itoa(j) + " y"
-					// log.Infof("%d: client new put %v,%v\n", cli, key, value)
+					//log.Infof("%d: client new put %v,%v\n", cli, key, value)
 					cluster.MustPut([]byte(key), []byte(value))
 					last = NextValue(last, value)
 					j++
 				} else {
 					start := strconv.Itoa(cli) + " " + fmt.Sprintf("%08d", 0)
 					end := strconv.Itoa(cli) + " " + fmt.Sprintf("%08d", j)
-					// log.Infof("%d: client new scan %v-%v\n", cli, start, end)
+					//log.Infof("%d: client new scan %v-%v\n", cli, start, end)
 					values := cluster.Scan([]byte(start), []byte(end))
 					v := string(bytes.Join(values, []byte("")))
 					if v != last {
@@ -410,13 +410,17 @@ func TestOnePartition2B(t *testing.T) {
 	MustGetEqual(cluster.engines[s1[0]], []byte("k1"), []byte("changed"))
 }
 
+//
 func TestManyPartitionsOneClient2B(t *testing.T) {
 	// Test: partitions, one client (2B) ...
+	fmt.Print("fdhjjjhhhhhhhhhsf")
 	GenericTest(t, "2B", 1, false, false, true, -1, false, false)
 }
 
+//
 func TestManyPartitionsManyClients2B(t *testing.T) {
 	// Test: partitions, many clients (2B) ...
+	fmt.Print("fgdddsf")
 	GenericTest(t, "2B", 5, false, false, true, -1, false, false)
 }
 
@@ -435,13 +439,16 @@ func TestPersistConcurrentUnreliable2B(t *testing.T) {
 	GenericTest(t, "2B", 5, true, true, false, -1, false, false)
 }
 
+//
 func TestPersistPartition2B(t *testing.T) {
+
 	// Test: restarts, partitions, many clients (2B) ...
 	GenericTest(t, "2B", 5, false, true, true, -1, false, false)
 }
 
+//
 func TestPersistPartitionUnreliable2B(t *testing.T) {
-	// Test: unreliable net, restarts, partitions, many clients (3A) ...
+	// Test: unreliable net, restarts, partitions, many clients (A) ...
 	GenericTest(t, "2B", 5, true, true, true, -1, false, false)
 }
 

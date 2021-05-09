@@ -158,6 +158,7 @@ func (rn *RawNode) Ready() Ready {
 	re := Ready{
 		Entries:          r.RaftLog.unstableEntries(),
 		CommittedEntries: r.RaftLog.nextEnts(),
+		Messages:         r.msgs,
 	}
 	softSt := r.softState()
 	hardSt := r.hardState()
@@ -168,6 +169,13 @@ func (rn *RawNode) Ready() Ready {
 	if !isHardStateEqual(rn.PreHardState, hardSt) {
 		//hardState need to be presisted
 		re.HardState = hardSt
+	}
+	rn.Raft.msgs = make([]pb.Message, 0)
+	//must put a snapshot to ready stuct ,this can make peer_storage
+	//to use apply snapshot to send snapShot data.
+	if !IsEmptySnap(r.RaftLog.pendingSnapshot) {
+		re.Snapshot = *r.RaftLog.pendingSnapshot
+		r.RaftLog.pendingSnapshot = nil
 	}
 	return re
 }
@@ -198,8 +206,11 @@ func (rn *RawNode) Advance(rd Ready) {
 		rn.Raft.RaftLog.stabled = rd.Entries[len(rd.Entries)-1].Index
 	}
 	if len(rd.CommittedEntries) > 0 {
-		rn.Raft.RaftLog.applied = rd.CommittedEntries[len(rd.CommittedEntries)-1].Index
+		//rn.Raft.RaftLog.applied = rd.CommittedEntries[len(rd.CommittedEntries)-1].Index
+		rn.Raft.RaftLog.applied = rn.Raft.RaftLog.committed
+		//fmt.Printf("\nl.applied: %d, l.committedIndex: %d\n", rn.Raft.RaftLog.applied, rn.Raft.RaftLog.committed)
 	}
+	rn.Raft.RaftLog.maybeCompact()
 }
 
 // GetProgress return the the Progress of this node and its peers, if this

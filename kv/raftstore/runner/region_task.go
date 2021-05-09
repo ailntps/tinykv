@@ -110,6 +110,7 @@ func (snapCtx *snapContext) applySnap(regionId uint64, startKey, endKey []byte, 
 		StartKey: startKey,
 		EndKey:   endKey,
 	})
+	log.Infof("a break point")
 	if err := snapshot.Apply(*applyOptions); err != nil {
 		return err
 	}
@@ -200,6 +201,7 @@ func doSnapshot(engines *engine_util.Engines, mgr *snap.SnapManager, regionId ui
 	// Set snapshot data
 	snapshotData := &rspb.RaftSnapshotData{Region: region}
 	snapshotStatics := snap.SnapStatistics{}
+	//s
 	err = s.Build(txn, region, snapshotData, &snapshotStatics, mgr)
 	if err != nil {
 		return nil, err
