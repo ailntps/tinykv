@@ -272,7 +272,7 @@ func (c *Cluster) GetRegion(key []byte) *metapb.Region {
 		// retry to get the region again.
 		SleepMS(20)
 	}
-	fmt.Print("this is breakPoint")
+	//fmt.Print("this is breakPoint")
 	panic(fmt.Sprintf("find no region for %s", hex.EncodeToString(key)))
 }
 

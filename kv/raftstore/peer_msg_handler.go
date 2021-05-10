@@ -88,17 +88,20 @@ func (d *peerMsgHandler) processRequest(entry *eraftpb.Entry, msg *raft_cmdpb.Ra
 		case raft_cmdpb.CmdType_Get:
 			if d.IsSpliting() {
 				resp = ErrResp(err)
+
+			} else {
+				d.peerStorage.applyState.AppliedIndex = entry.Index
+				wb.SetMeta(meta.ApplyStateKey(d.regionId), d.peerStorage.applyState)
+				wb.WriteToDB(d.peerStorage.Engines.Kv)
+				value, err := engine_util.GetCF(d.peerStorage.Engines.Kv, req.Get.Cf, req.Get.Key)
+				if err != nil {
+					value = nil
+				}
+				log.Infof("\nread value %s\n", value)
+				resp.Responses = []*raft_cmdpb.Response{{CmdType: raft_cmdpb.CmdType_Get, Get: &raft_cmdpb.GetResponse{Value: value}}}
+				wb.Reset()
 			}
-			d.peerStorage.applyState.AppliedIndex = entry.Index
-			wb.SetMeta(meta.ApplyStateKey(d.regionId), d.peerStorage.applyState)
-			wb.WriteToDB(d.peerStorage.Engines.Kv)
-			value, err := engine_util.GetCF(d.peerStorage.Engines.Kv, req.Get.Cf, req.Get.Key)
-			if err != nil {
-				value = nil
-			}
-			log.Infof("\nread value %s\n", value)
-			resp.Responses = []*raft_cmdpb.Response{{CmdType: raft_cmdpb.CmdType_Get, Get: &raft_cmdpb.GetResponse{Value: value}}}
-			wb.Reset()
+
 		case raft_cmdpb.CmdType_Put:
 			resp.Responses = []*raft_cmdpb.Response{{CmdType: raft_cmdpb.CmdType_Put, Put: &raft_cmdpb.PutResponse{}}}
 		case raft_cmdpb.CmdType_Delete:
@@ -107,10 +110,12 @@ func (d *peerMsgHandler) processRequest(entry *eraftpb.Entry, msg *raft_cmdpb.Ra
 			//log.Infof("id =%d scan kv", d.RaftGroup.Raft.Get())
 			if d.IsSpliting() {
 				resp = ErrResp(err)
+			} else {
+				resp.Responses = []*raft_cmdpb.Response{{CmdType: raft_cmdpb.CmdType_Snap, Snap: &raft_cmdpb.SnapResponse{Region: d.Region()}}}
+				p.cb.Txn = d.peerStorage.Engines.Kv.NewTransaction(false)
+				wb.Reset()
 			}
-			resp.Responses = []*raft_cmdpb.Response{{CmdType: raft_cmdpb.CmdType_Snap, Snap: &raft_cmdpb.SnapResponse{Region: d.Region()}}}
-			p.cb.Txn = d.peerStorage.Engines.Kv.NewTransaction(false)
-			wb.Reset()
+
 		}
 		p.cb.Done(resp)
 	})
@@ -132,8 +137,7 @@ func (d *peerMsgHandler) processAdminRequest(entry *eraftpb.Entry, msg *raft_cmd
 			d.ScheduleCompactLog(applySt.TruncatedState.Index)
 		}
 	case raft_cmdpb.AdminCmdType_Split:
-		lastindex, _ := d.peerStorage.LastIndex()
-		d.LastCommittedSplitIndex = lastindex
+		d.Spliting = true
 
 		region := d.Region()
 		err := util.CheckRegionEpoch(msg, region, true)
@@ -184,6 +188,9 @@ func (d *peerMsgHandler) processAdminRequest(entry *eraftpb.Entry, msg *raft_cmd
 		}
 		d.ctx.router.register(peer)
 		d.ctx.router.send(newRegion.Id, message.Msg{Type: message.MsgTypeStart})
+
+		d.Spliting = false
+
 		d.handleProposal(entry, func(p *proposal) {
 			p.cb.Done(&raft_cmdpb.RaftCmdResponse{
 				Header: &raft_cmdpb.RaftResponseHeader{},

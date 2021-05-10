@@ -110,8 +110,8 @@ type peer struct {
 	// Approximate size of the region.
 	// It's updated everytime the split checker scan the data
 	// (Used in 3B split)
-	ApproximateSize         *uint64
-	LastCommittedSplitIndex uint64
+	ApproximateSize *uint64
+	Spliting        bool
 }
 
 //NewPeer create a peer
@@ -163,7 +163,7 @@ func NewPeer(storeId uint64, cfg *config.Config, engines *engine_util.Engines, r
 	return p, nil
 }
 func (p *peer) IsSpliting() bool {
-	if p.LastCommittedSplitIndex > p.peerStorage.AppliedIndex() {
+	if p.Spliting {
 		return true
 	}
 	return false
