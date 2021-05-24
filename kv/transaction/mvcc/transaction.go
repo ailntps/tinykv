@@ -1,10 +1,12 @@
 package mvcc
 
 import (
+	"bytes"
 	"encoding/binary"
 
 	"github.com/pingcap-incubator/tinykv/kv/storage"
 	"github.com/pingcap-incubator/tinykv/kv/util/codec"
+	"github.com/pingcap-incubator/tinykv/kv/util/engine_util"
 	"github.com/pingcap-incubator/tinykv/proto/pkg/kvrpcpb"
 	"github.com/pingcap-incubator/tinykv/scheduler/pkg/tsoutil"
 )
@@ -40,6 +42,16 @@ func (txn *MvccTxn) Writes() []storage.Modify {
 
 // PutWrite records a write at key and ts.
 func (txn *MvccTxn) PutWrite(key []byte, ts uint64, write *Write) {
+
+	wr := storage.Put{
+		Key:   EncodeKey(key, ts),
+		Value: write.ToBytes(),
+		Cf:    engine_util.CfWrite,
+	}
+	modify := storage.Modify{
+		Data: wr,
+	}
+	txn.writes = append(txn.writes, modify)
 	// Your Code Here (4A).
 }
 
@@ -47,16 +59,45 @@ func (txn *MvccTxn) PutWrite(key []byte, ts uint64, write *Write) {
 // if an error occurs during lookup.
 func (txn *MvccTxn) GetLock(key []byte) (*Lock, error) {
 	// Your Code Here (4A).
-	return nil, nil
+	value, err := txn.Reader.GetCF(engine_util.CfLock, key)
+	if nil != err {
+		return nil, err
+	}
+	if nil == value {
+		return nil, nil
+	}
+	lock, err := ParseLock(value)
+	if nil != err {
+		return nil, err
+	}
+	return lock, nil
 }
 
 // PutLock adds a key/lock to this transaction.
 func (txn *MvccTxn) PutLock(key []byte, lock *Lock) {
+	lo := storage.Put{
+		Key:   key,
+		Value: lock.ToBytes(),
+		Cf:    engine_util.CfLock,
+	}
+
+	modify := storage.Modify{
+		Data: lo,
+	}
+	txn.writes = append(txn.writes, modify)
 	// Your Code Here (4A).
 }
 
 // DeleteLock adds a delete lock to this transaction.
 func (txn *MvccTxn) DeleteLock(key []byte) {
+	delete := storage.Delete{
+		Cf:  engine_util.CfLock,
+		Key: key,
+	}
+	modify := storage.Modify{
+		Data: delete,
+	}
+	txn.writes = append(txn.writes, modify)
 	// Your Code Here (4A).
 }
 
@@ -64,16 +105,61 @@ func (txn *MvccTxn) DeleteLock(key []byte) {
 // I.e., the most recent value committed before the start of this transaction.
 func (txn *MvccTxn) GetValue(key []byte) ([]byte, error) {
 	// Your Code Here (4A).
-	return nil, nil
+	iterator := txn.Reader.IterCF(engine_util.CfWrite)
+	defer iterator.Close()
+
+	iterator.Seek(EncodeKey(key, txn.StartTS))
+	if !iterator.Valid() {
+		return nil, nil
+	}
+
+	item := iterator.Item()
+	value, err := item.Value()
+	if nil != err {
+		return nil, err
+	}
+	if !bytes.Equal(key, DecodeUserKey(item.Key())) {
+		return nil, nil
+	}
+	write, err := ParseWrite(value)
+	if nil != err {
+		return nil, err
+	}
+	if write.Kind == WriteKindDelete {
+		return nil, nil
+	}
+
+	v, err := txn.Reader.GetCF(engine_util.CfDefault, EncodeKey(key, write.StartTS))
+	if err != nil {
+		return nil, err
+	}
+	return v, nil
 }
 
 // PutValue adds a key/value write to this transaction.
 func (txn *MvccTxn) PutValue(key []byte, value []byte) {
+	va := storage.Put{
+		Key:   EncodeKey(key, txn.StartTS),
+		Value: value,
+		Cf:    engine_util.CfDefault,
+	}
+	modify := storage.Modify{
+		Data: va,
+	}
+	txn.writes = append(txn.writes, modify)
 	// Your Code Here (4A).
 }
 
 // DeleteValue removes a key/value pair in this transaction.
 func (txn *MvccTxn) DeleteValue(key []byte) {
+	delete := storage.Delete{
+		Key: EncodeKey(key, txn.StartTS),
+		Cf:  engine_util.CfDefault,
+	}
+	modify := storage.Modify{
+		Data: delete,
+	}
+	txn.writes = append(txn.writes, modify)
 	// Your Code Here (4A).
 }
 
@@ -81,6 +167,23 @@ func (txn *MvccTxn) DeleteValue(key []byte) {
 // write's commit timestamp, or an error.
 func (txn *MvccTxn) CurrentWrite(key []byte) (*Write, uint64, error) {
 	// Your Code Here (4A).
+	iterator := txn.Reader.IterCF(engine_util.CfWrite)
+	defer iterator.Close()
+	for ; iterator.Valid(); iterator.Next() {
+		item := iterator.Item()
+		value, err := item.Value()
+		if nil != err {
+			return nil, 0, err
+		}
+		write, err := ParseWrite(value)
+		if nil != err {
+			return nil, 0, err
+		}
+		if write.StartTS == txn.StartTS {
+			return write, decodeTimestamp(item.Key()), nil
+		}
+	}
+
 	return nil, 0, nil
 }
 
@@ -88,6 +191,25 @@ func (txn *MvccTxn) CurrentWrite(key []byte) (*Write, uint64, error) {
 // write's commit timestamp, or an error.
 func (txn *MvccTxn) MostRecentWrite(key []byte) (*Write, uint64, error) {
 	// Your Code Here (4A).
+	iterator := txn.Reader.IterCF(engine_util.CfWrite)
+	defer iterator.Close()
+	for ; iterator.Valid(); iterator.Next() {
+		item := iterator.Item()
+		k := item.Key()
+
+		uk := DecodeUserKey(k)
+		if bytes.Equal(uk, key) {
+			Value, err := item.Value()
+			if nil != err {
+				return nil, 0, err
+			}
+			write, err := ParseWrite(Value)
+			if nil != err {
+				return nil, 0, err
+			}
+			return write, decodeTimestamp(k), nil
+		}
+	}
 	return nil, 0, nil
 }
 
@@ -97,6 +219,10 @@ func (txn *MvccTxn) MostRecentWrite(key []byte) (*Write, uint64, error) {
 func EncodeKey(key []byte, ts uint64) []byte {
 	encodedKey := codec.EncodeBytes(key)
 	newKey := append(encodedKey, make([]byte, 8)...)
+	//put ts is bigEndian,ts is uint64,8 bytes.
+	//ts1 =[0,0,0,0,0,0,0,1] ts2=[0,0,0,0,0,0,0,2]
+	//newkey1=[...,0xFE,0xFF,.....] newkey2=[....,0xFD,0xFF,....]
+	//this is descending order
 	binary.BigEndian.PutUint64(newKey[len(encodedKey):], ^ts)
 	return newKey
 }

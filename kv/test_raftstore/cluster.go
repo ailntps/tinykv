@@ -56,7 +56,7 @@ func (c *Cluster) Start() {
 	clusterID := c.schedulerClient.GetClusterID(ctx)
 
 	for storeID := uint64(1); storeID <= uint64(c.count); storeID++ {
-		dbPath, err := ioutil.TempDir("", "test-raftstore")
+		dbPath, err := ioutil.TempDir("/tmp", "test-raftstore")
 		if err != nil {
 			panic(err)
 		}

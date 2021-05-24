@@ -2,6 +2,7 @@ package mvcc
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
 
 	"github.com/pingcap-incubator/tinykv/kv/util/engine_util"
@@ -57,7 +58,22 @@ func assertDeleteInTxn(t *testing.T, txn *MvccTxn, key []byte, cf string) {
 	assert.True(t, ok)
 	assert.Equal(t, expected, del)
 }
-
+func OrderEntry(m *storage.MemStorage) {
+	m.Set(engine_util.CfDefault, EncodeKey([]byte{17, 240}, 41), []byte{1, 2, 3})
+	m.Set(engine_util.CfDefault, EncodeKey([]byte{17, 240}, 42), []byte{1, 2, 3})
+	m.Set(engine_util.CfDefault, EncodeKey([]byte{17, 240}, 44), []byte{1, 2, 3})
+}
+func TestBadgerOrder(t *testing.T) {
+	txn := testTxn(42, OrderEntry)
+	iter := txn.Reader.IterCF(engine_util.CfDefault)
+	iter.Seek(EncodeKey([]byte{17, 24}, 43))
+	for ; iter.Valid(); iter.Next() {
+		key := iter.Item().Key()
+		fmt.Printf("key :%d  time:%d", DecodeUserKey(key), decodeTimestamp(key))
+		fmt.Printf("\n")
+	}
+	fmt.Print("\n")
+}
 func TestPutLock4A(t *testing.T) {
 	txn := testTxn(42, nil)
 	lock := Lock{

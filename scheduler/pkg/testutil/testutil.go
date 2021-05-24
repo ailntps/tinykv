@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	waitMaxRetry   = 200
+	waitMaxRetry   = 400
 	waitRetrySleep = time.Millisecond * 100
 )
 
